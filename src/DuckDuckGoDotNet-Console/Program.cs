@@ -2,10 +2,12 @@
 
 using DuckDuckGoDotNet;
 
-var d = new DuckDuckGoSearch(timeout:100);
-var search=await d.TextAsync("Iran");
+var d = new DuckDuckGoSearch();
+var search = await d.TextAsync("Iran");
 foreach (var item in search)
 {
-    var a=item.Title;
+    var a = item.Title;
     Console.WriteLine(a);
 }
+
+Console.ReadLine();

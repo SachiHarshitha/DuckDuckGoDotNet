@@ -1,8 +1,13 @@
+using System;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+
 using DuckDuckGoDotNet.Search;
+
 using HtmlAgilityPack;
+
 using Microsoft.Extensions.Logging;
 
 namespace DuckDuckGoDotNet
@@ -17,6 +22,7 @@ namespace DuckDuckGoDotNet
         private readonly bool verify;
 
         private List<Dictionary<string, string>> chatMessages = new List<Dictionary<string, string>>();
+
         private static readonly string[] impersonates = new string[]
         {
             "chrome_100", "chrome_101", "chrome_104", "chrome_105", "chrome_106", "chrome_107",
@@ -36,7 +42,6 @@ namespace DuckDuckGoDotNet
         {
             "android", "ios", "linux", "macos", "windows"
         };
-
 
         public DuckDuckGoSearch(Dictionary<string, string> headers = null, string proxy = null, string proxies = null, int? timeout = 10, bool verify = true)
         {
@@ -89,6 +94,7 @@ namespace DuckDuckGoDotNet
             }
             return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36";
         }
+
         private async Task<HttpResponseMessage> GetUrl(
             string method,
             string url,
@@ -136,7 +142,7 @@ namespace DuckDuckGoDotNet
                 {
                     return response;
                 }
-                else if (new[] { HttpStatusCode.Accepted, HttpStatusCode.MovedPermanently, HttpStatusCode.Forbidden, HttpStatusCode.BadRequest, HttpStatusCode.TooManyRequests, (HttpStatusCode)418 }.Contains(response.StatusCode))
+                else if (new[] { HttpStatusCode.Accepted, HttpStatusCode.MovedPermanently, HttpStatusCode.Forbidden, HttpStatusCode.BadRequest, (HttpStatusCode)429, (HttpStatusCode)418 }.Contains(response.StatusCode))
                 {
                     throw new RatelimitException($"{response.RequestMessage.RequestUri} {(int)response.StatusCode} Ratelimit");
                 }
@@ -144,7 +150,7 @@ namespace DuckDuckGoDotNet
             }
             catch (HttpRequestException ex)
             {
-                if (ex.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+                if (ex.Message.ToLower().Contains("timeout"))
                 {
                     throw new TimeoutException($"{url} {ex.GetType().Name}: {ex.Message}", ex);
                 }
@@ -155,7 +161,7 @@ namespace DuckDuckGoDotNet
         private async Task<string> GetVqd(string keywords)
         {
             using var resp = await GetUrl("GET", "https://duckduckgo.com", new Dictionary<string, string> { { "q", keywords } });
-            using var stream = resp.Content.ReadAsStream();
+            using var stream = await resp.Content.ReadAsStreamAsync();
             byte[] content = new byte[stream.Length];
             stream.Read(content, 0, content.Length);
             return Utils.ExtractVqd(content, keywords);
@@ -400,10 +406,11 @@ namespace DuckDuckGoDotNet
 
                 string next = respJson.ContainsKey("next") ? respJson["next"].ToString() : null;
                 if (string.IsNullOrEmpty(next) || !maxResults.HasValue) return results;
-                payload["s"] = next.Split("s=")[1].Split("&")[0];
+                payload["s"] = next?.Split(["s="], StringSplitOptions.None)[1]?.Split('&')[0];
             }
             return results;
         }
+
         /// <summary>
         /// DuckDuckGo videos search. Query params: https://duckduckgo.com/params.
         /// </summary>
@@ -454,10 +461,11 @@ namespace DuckDuckGoDotNet
                 results.AddRange(pageData);
                 string next = respJson.ContainsKey("next") ? respJson["next"].ToString() : null;
                 if (string.IsNullOrEmpty(next) || !maxResults.HasValue) return results;
-                payload["s"] = next.Split("s=")[1].Split("&")[0];
+                payload["s"] = next.Split(new[] { "s=" }, StringSplitOptions.None)[1].Split('&')[0];
             }
             return results;
         }
+
         /// <summary>
         /// DuckDuckGo news search. Query params: https://duckduckgo.com/params.
         /// </summary>
@@ -516,7 +524,7 @@ namespace DuckDuckGoDotNet
 
                 string next = respJson.ContainsKey("next") ? respJson["next"].ToString() : null;
                 if (string.IsNullOrEmpty(next) || !maxResults.HasValue) return results;
-                payload["s"] = next.Split("s=")[1].Split("&")[0];
+                payload["s"] = next.Split(new[] { "s=" }, StringSplitOptions.None)[1].Split('&')[0];
             }
             return results;
         }
